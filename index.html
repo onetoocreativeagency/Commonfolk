@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Partnership Coffee Globe</title>
+    <meta name="description" content="Spin the globe to meet the farmers and producers behind every Commonfolk coffee." />
+  </head>
+  <body>
+    <section class="cf-partners" aria-labelledby="cf-partners-title">
+      <header class="cf-partners__header">
+        <h2 id="cf-partners-title" class="cf-partners__title">Partnership Coffee.</h2>
+        <p class="cf-partners__intro">
+          We aim to purchase over 90% of all coffee roasted from our producing partners in Brazil, Colombia,
+          Mexico, Nicaragua, and Uganda. Give the globe a spin and say g’day.
+        </p>
+      </header>
+
+      <div class="cf-partners__stage">
+        <div class="cf-globe" data-globe></div>
+        <div class="cf-tooltip" data-tooltip hidden></div>
+        <p class="cf-hint" data-hint>Drag to spin · tap a pin</p>
+
+        <article class="cf-card" data-card hidden aria-live="polite">
+          <button class="cf-card__close" type="button" data-close aria-label="Close">×</button>
+          <div class="cf-card__media" data-media></div>
+          <div class="cf-card__body">
+            <p class="cf-card__kicker" data-kicker></p>
+            <h3 class="cf-card__name" data-name></h3>
+            <p class="cf-card__farm" data-farm></p>
+            <p class="cf-card__story" data-story></p>
+            <div class="cf-card__coffee" data-coffee hidden>
+              <p class="cf-card__label">Latest coffee</p>
+              <p class="cf-card__coffee-name" data-coffee-name></p>
+              <ul class="cf-card__notes" data-coffee-notes></ul>
+              <a class="cf-card__shop" data-coffee-link target="_blank" rel="noopener">Shop this coffee ↗</a>
+            </div>
+            <div class="cf-card__actions">
+              <a class="cf-button" data-cta target="_blank" rel="noopener">Read their story →</a>
+              <div class="cf-card__nav">
+                <button type="button" data-prev aria-label="Previous partner">←</button>
+                <button type="button" data-next aria-label="Next partner">→</button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <nav class="cf-partners__list" aria-label="Coffee partners" data-list></nav>
+    </section>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,353 @@
+@import '@fontsource-variable/bricolage-grotesque/standard.css';
+
+/* Brand tokens — values from the Commonfolk UI 2024 Figma file.
+   GT Walsheim + Commonfolk Hand are licensed brand fonts: they'll be picked up
+   automatically on the live site; Bricolage Grotesque is the local stand-in. */
+:root {
+  --cf-dank-purple: #413549;
+  --cf-dank-purple-500: #9083a2;
+  --cf-dank-purple-100: #e8e4f2;
+  --cf-dusky-blue: #9cbde7;
+  --cf-dusky-blue-100: #f5f8fd;
+  --cf-dirty-pink: #d2aed5;
+  --cf-dirty-pink-100: #fbf2f7;
+  --cf-off-white: #fffdfd;
+  --cf-off-black: #1e1a1a;
+
+  --cf-space-xs: 4px;
+  --cf-space-s: 8px;
+  --cf-space-r: 16px;
+  --cf-space-m: 24px;
+  --cf-space-l: 32px;
+  --cf-radius-s: 8px;
+  --cf-radius-l: 16px;
+
+  --cf-font: 'GT Walsheim', 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  --cf-font-condensed: 'GT Walsheim Condensed', 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  --cf-font-hand: 'Commonfolk Hand', 'Bricolage Grotesque Variable', cursive;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--cf-dank-purple-100);
+  color: var(--cf-dank-purple);
+  font-family: var(--cf-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.cf-partners {
+  /* Globe colours — read by globe.js */
+  --cf-globe-ocean: var(--cf-dank-purple);
+  --cf-globe-land: var(--cf-off-white);
+  --cf-globe-glow: var(--cf-dusky-blue);
+  --cf-globe-pin: var(--cf-dirty-pink);
+  --cf-globe-pin-active: var(--cf-dusky-blue);
+  --cf-globe-arc: var(--cf-dirty-pink);
+  --cf-globe-home: var(--cf-dusky-blue);
+
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 96px var(--cf-space-l) var(--cf-space-l);
+}
+
+/* Condensed headline style (GT Walsheim Condensed in the Figma). */
+.cf-partners__title,
+.cf-card__name,
+.cf-card__coffee-name,
+.cf-button,
+.cf-partners__list button {
+  font-family: var(--cf-font-condensed);
+  font-stretch: 75%;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.cf-partners__header {
+  border-top: 1px solid var(--cf-dank-purple);
+  padding-top: var(--cf-space-m);
+  display: grid;
+  gap: var(--cf-space-r);
+}
+
+.cf-partners__title {
+  margin: 0;
+  font-size: clamp(40px, 5vw, 56px);
+}
+
+.cf-partners__intro {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 20px;
+  line-height: 1.6;
+}
+
+/* Stage: globe + floating card */
+.cf-partners__stage {
+  position: relative;
+  margin-top: var(--cf-space-l);
+  height: min(78vh, 760px);
+  min-height: 480px;
+}
+
+.cf-globe {
+  position: absolute;
+  inset: 0;
+}
+
+.cf-globe canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+.cf-hint {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--cf-dank-purple-500);
+  transition: opacity 0.4s;
+}
+
+.cf-tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  padding: var(--cf-space-xs) var(--cf-space-s);
+  border-radius: var(--cf-radius-s);
+  background: var(--cf-off-white);
+  font-family: var(--cf-font-hand);
+  font-size: 18px;
+  white-space: nowrap;
+  transform: translate(-50%, calc(-100% - 14px)) rotate(-4deg);
+  box-shadow: 0 4px 0 var(--cf-dank-purple);
+}
+
+/* Partner card — mirrors the "Card with Illustration" / newsletter pop-up in the UI kit */
+.cf-card {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 400px;
+  max-height: 100%;
+  overflow: auto;
+  transform: translateY(-50%);
+  background: var(--cf-off-white);
+  border-radius: var(--cf-radius-l);
+  animation: cf-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cf-card[hidden] { display: none; }
+
+@keyframes cf-pop {
+  from { opacity: 0; transform: translateY(-50%) scale(0.92) rotate(-2deg); }
+}
+
+.cf-card__close {
+  position: absolute;
+  top: var(--cf-space-r);
+  right: var(--cf-space-r);
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cf-off-white);
+  color: var(--cf-dank-purple);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cf-card__media {
+  aspect-ratio: 2 / 1;
+  border-radius: var(--cf-radius-l) var(--cf-radius-l) 0 0;
+  overflow: hidden;
+}
+
+.cf-card__media img,
+.cf-card__media svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cf-card__body {
+  display: grid;
+  gap: var(--cf-space-r);
+  padding: var(--cf-space-m) var(--cf-space-l) var(--cf-space-l);
+}
+
+.cf-card__body p { margin: 0; }
+
+.cf-card__kicker,
+.cf-card__label {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--cf-dank-purple-500);
+}
+
+.cf-card__name {
+  margin: calc(var(--cf-space-r) * -1) 0 0;
+  font-size: 40px;
+  line-height: 1.1;
+}
+
+.cf-card__farm {
+  margin-top: calc(var(--cf-space-s) * -1) !important;
+  font-size: 16px;
+  color: var(--cf-dank-purple-500);
+}
+
+.cf-card__story {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.cf-card__coffee {
+  display: grid;
+  gap: var(--cf-space-xs);
+  padding: var(--cf-space-r);
+  border-radius: var(--cf-radius-s);
+  background: var(--cf-dirty-pink-100);
+}
+
+.cf-card__coffee[hidden] { display: none; }
+
+.cf-card__coffee-name { font-size: 28px; line-height: 1; }
+
+.cf-card__notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cf-space-xs);
+  margin: var(--cf-space-xs) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cf-card__notes li {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--cf-off-white);
+  border: 1px solid var(--cf-dirty-pink);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.cf-card__notes li:nth-child(even) { transform: rotate(-2deg); }
+.cf-card__notes li:nth-child(odd) { transform: rotate(1.5deg); }
+
+.cf-card__shop {
+  justify-self: start;
+  color: var(--cf-dank-purple);
+  font-size: 16px;
+  text-underline-offset: 3px;
+}
+
+.cf-card__actions {
+  display: flex;
+  gap: var(--cf-space-s);
+  align-items: stretch;
+}
+
+.cf-button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--cf-space-r);
+  border-radius: var(--cf-radius-l);
+  background: var(--cf-dank-purple);
+  color: var(--cf-dank-purple-100);
+  font-size: 24px;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cf-button:hover { transform: rotate(-1.5deg) scale(1.02); }
+.cf-button[hidden] { display: none; }
+
+.cf-card__nav { display: flex; gap: var(--cf-space-xs); }
+
+.cf-card__nav button {
+  width: 56px;
+  border: 1px solid var(--cf-dank-purple);
+  border-radius: var(--cf-radius-l);
+  background: none;
+  color: var(--cf-dank-purple);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.cf-card__nav button:hover { background: var(--cf-dank-purple-100); }
+
+/* Partner list — mirrors the "Locations" tab row in the UI kit */
+.cf-partners__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cf-space-s) var(--cf-space-l);
+  margin-top: var(--cf-space-l);
+  padding-top: var(--cf-space-m);
+  border-top: 1px solid var(--cf-dank-purple);
+}
+
+.cf-partners__list button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cf-dank-purple-500);
+  font-size: clamp(28px, 3.4vw, 44px);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.cf-partners__list button:hover,
+.cf-partners__list button[aria-pressed='true'] {
+  color: var(--cf-dank-purple);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cf-dank-purple);
+  outline-offset: 3px;
+}
+
+/* Mobile: card becomes a bottom sheet over the globe */
+@media (max-width: 760px) {
+  .cf-partners { padding: 48px var(--cf-space-r) var(--cf-space-r); }
+  .cf-partners__intro { font-size: 17px; }
+  /* Card drops below the globe so the selected pin stays in view. */
+  .cf-partners__stage { height: auto; min-height: 0; }
+  .cf-globe { position: relative; height: min(100vw, 480px); }
+  .cf-hint { position: static; text-align: center; }
+  .cf-card {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: auto;
+    max-height: none;
+    margin-top: var(--cf-space-r);
+    transform: none;
+  }
+  @keyframes cf-pop {
+    from { opacity: 0; transform: translateY(24px); }
+  }
+  .cf-card__media { aspect-ratio: 16 / 7; }
+  .cf-card__body { padding: var(--cf-space-r) var(--cf-space-m) var(--cf-space-m); }
+  .cf-card__name { font-size: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-card { animation: none; }
+  .cf-button, .cf-card__notes li { transition: none; transform: none; }
+}
