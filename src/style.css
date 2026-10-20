@@ -372,3 +372,19 @@ body {
   .cf-card { animation: none; }
   .cf-button, .cf-card__notes li { transition: none; transform: none; }
 }
+
+/* Tweak panel (lil-gui), dev/preview only. lil-gui re-declares its variables on
+   every nested folder, hence the second selector. */
+.lil-gui.cf-tweaks,
+.cf-tweaks .lil-gui {
+  --background-color: var(--cf-off-black);
+  --title-background-color: var(--cf-dank-purple);
+  --widget-color: var(--cf-dank-purple);
+  --hover-color: var(--cf-dank-purple-500);
+  --focus-color: var(--cf-dank-purple-500);
+  --number-color: var(--cf-dusky-blue);
+  --string-color: var(--cf-dirty-pink);
+  --font-family: var(--cf-font);
+  --width: 280px;
+  z-index: 10;
+}

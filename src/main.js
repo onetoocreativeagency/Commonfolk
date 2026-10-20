@@ -1,6 +1,7 @@
 import './style.css';
 import { createPartnerGlobe } from './globe.js';
 import { partners, home } from './partners.js';
+import { settings } from './settings.js';
 
 const root = document.querySelector('.cf-partners');
 const $ = (selector) => root.querySelector(selector);
@@ -78,6 +79,7 @@ let chipFor = null;
 const globe = createPartnerGlobe($('[data-globe]'), {
   partners,
   home,
+  settings,
   onHover: (partner) => { hovered = partner; },
   onSelect(partner) {
     card.hidden = !partner;
@@ -91,8 +93,14 @@ const globe = createPartnerGlobe($('[data-globe]'), {
   },
 });
 
-(function followChip() {
-  const partner = card.hidden ? hovered ?? ambient : null;
+let lastCycle = 0;
+(function followChip(now = 0) {
+  if (now - lastCycle > settings.chipInterval * 1000) {
+    lastCycle = now;
+    const facing = partners.filter((p) => globe.screenPosition(p.id));
+    ambient = facing.length ? facing[(facing.indexOf(ambient) + 1) % facing.length] : null;
+  }
+  const partner = card.hidden ? hovered ?? (settings.showChips ? ambient : null) : null;
   const pos = partner && globe.screenPosition(partner.id);
   if (partner !== chipFor) {
     chipFor = partner;
@@ -107,11 +115,6 @@ const globe = createPartnerGlobe($('[data-globe]'), {
   if (pos) chip.style.translate = `${pos.x}px ${pos.y}px`;
   requestAnimationFrame(followChip);
 })();
-
-setInterval(() => {
-  const facing = partners.filter((p) => globe.screenPosition(p.id));
-  ambient = facing.length ? facing[(facing.indexOf(ambient) + 1) % facing.length] : null;
-}, 3000);
 
 function step(delta) {
   const current = buttons.findIndex((b) => b.getAttribute('aria-pressed') === 'true');
@@ -131,3 +134,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight') step(1);
   if (e.key === 'ArrowLeft') step(-1);
 });
+
+// Tweak panel: on in dev and the single-file preview, or on any build with ?tweak.
+if (import.meta.env.DEV || import.meta.env.MODE === 'preview' || new URLSearchParams(location.search).has('tweak')) {
+  import('./tweaks.js').then(({ mountTweaks }) => mountTweaks({ globe, settings, root }));
+}

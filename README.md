@@ -8,12 +8,15 @@ Built with [three.js](https://threejs.org) (WebGL) + [Vite](https://vite.dev). N
 npm install
 npm run dev      # local dev server
 npm run build    # production bundle in dist/
+npm run build:preview  # one self-contained HTML file in preview/ (opens from disk, includes the tweak panel)
 ```
 
 ## How it works
 
 | File | What it does |
 | --- | --- |
+| `src/settings.js` | **The look & feel.** Globe size, dot density/size, arc height, marker size, chip timing, etc. |
+| `src/tweaks.js` | Live tweak panel (see below). Loaded on demand — not part of the normal page bundle. |
 | `src/partners.js` | **The content.** One entry per partner: name, farm, location, story, partner-page URL, latest coffee. Edit this to add/update partners. |
 | `src/globe.js` | The 3D globe. Dotted land (sampled from Natural Earth via `world-atlas`), pins, animated arcs back to the Mornington roastery, drag/auto-rotate, fly-to-partner. |
 | `src/main.js` | Card, floating chips and partner list UI wired to the globe. |
@@ -26,6 +29,15 @@ npm run build    # production bundle in dist/
 - Partner names below the globe do the same (keyboard accessible); ←/→ and Esc work while a card is open.
 - Respects `prefers-reduced-motion` (no auto-rotate, instant transitions).
 - Rendering pauses when the globe is scrolled off-screen.
+
+### Tweak panel
+
+A slider panel for every visual parameter (globe, dots, arcs, markers, chips, colours). It appears in `npm run dev`, in the single-file preview, and on any build with `?tweak` in the URL.
+
+- Changes apply live and are remembered in your browser until you hit **Reset everything**.
+- **Copy settings** → paste over `src/settings.js` to make your tuning the default.
+- **Copy colours** → paste into the `.cf-partners` block in `src/style.css` (brand colours come out as `var(--cf-…)` tokens).
+- **Replay intro** re-runs the pop-in and arc draw-in.
 
 ### Editing partners
 

@@ -6,7 +6,23 @@ import land110 from 'world-atlas/land-110m.json';
 
 const R = 1;
 const DEG = Math.PI / 180;
-const CAMERA_DISTANCE = 4.2;
+const BASE_DISTANCE = 4.2;
+
+// Globe colour → CSS custom property it's read from (on the container).
+export const COLOR_TOKENS = {
+  ocean: '--cf-globe-ocean',
+  shade: '--cf-globe-shade',
+  landA: '--cf-globe-land-a',
+  landB: '--cf-globe-land-b',
+  landC: '--cf-globe-land-c',
+  glow: '--cf-globe-glow',
+  pin: '--cf-globe-pin',
+  halo: '--cf-globe-halo',
+  pinActive: '--cf-globe-pin-active',
+  arcA: '--cf-globe-arc-a',
+  arcB: '--cf-globe-arc-b',
+  home: '--cf-globe-home',
+};
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const easeOutBack = (t) => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2);
@@ -48,42 +64,42 @@ function buildLandMask(width = 2048, height = 1024) {
   };
 }
 
-// Randomly scattered "stipple" dots over land, tinted by a screen-space gradient.
-function buildLandDots(colors, samples = 90000) {
-  const isLand = buildLandMask();
+// Randomly scattered "stipple" dots over land. Each dot carries three randoms
+// (size, opacity, colour jitter) that the shader shapes using live settings.
+function buildDotGeometry(isLand, samples) {
   const positions = [];
-  const sizes = [];
-  const alphas = [];
-  const jitters = [];
+  const randoms = [];
   for (let i = 0; i < samples; i++) {
     const lat = Math.asin(Math.random() * 2 - 1) / DEG; // uniform over the sphere
     const lng = Math.random() * 360 - 180;
     if (lat < -60 || !isLand(lat, lng)) continue;
     const p = latLngToVector3(lat, lng, R * 1.002);
     positions.push(p.x, p.y, p.z);
-    sizes.push(0.5 + Math.random() ** 3 * 1.6); // mostly fine grains, a few chunky ones
-    alphas.push(0.55 + Math.random() * 0.45);
-    jitters.push(Math.random() - 0.5);
+    randoms.push(Math.random(), Math.random(), Math.random() - 0.5);
   }
-
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1));
-  geometry.setAttribute('aAlpha', new THREE.Float32BufferAttribute(alphas, 1));
-  geometry.setAttribute('aJitter', new THREE.Float32BufferAttribute(jitters, 1));
+  geometry.setAttribute('aRand', new THREE.Float32BufferAttribute(randoms, 3));
+  return geometry;
+}
 
-  const material = new THREE.ShaderMaterial({
+function buildDotMaterial(colors) {
+  return new THREE.ShaderMaterial({
     uniforms: {
       uSize: { value: 2 },
+      uSizeVar: { value: 1.6 },
+      uMinAlpha: { value: 0.55 },
+      uJitter: { value: 0.7 },
       uColorA: { value: colors.landA },
       uColorB: { value: colors.landB },
       uColorC: { value: colors.landC },
     },
     vertexShader: /* glsl */ `
-      attribute float aSize;
-      attribute float aAlpha;
-      attribute float aJitter;
+      attribute vec3 aRand;
       uniform float uSize;
+      uniform float uSizeVar;
+      uniform float uMinAlpha;
+      uniform float uJitter;
       varying float vAlpha;
       varying float vGrad;
       void main() {
@@ -93,9 +109,9 @@ function buildLandDots(colors, samples = 90000) {
         vec2 ndc = gl_Position.xy / gl_Position.w;
         // Diagonal sweep bottom-left → top-right, jittered per dot for a confetti mix.
         float sweep = clamp(0.5 + ndc.x * 0.45 + ndc.y * 0.3, 0.0, 1.0);
-        vGrad = clamp(sweep + aJitter * 0.7, 0.0, 1.0);
-        vAlpha = aAlpha * smoothstep(0.0, 0.35, facing) * (1.0 - 0.3 * sweep);
-        gl_PointSize = aSize * uSize;
+        vGrad = clamp(sweep + aRand.z * uJitter, 0.0, 1.0);
+        vAlpha = (uMinAlpha + aRand.y * (1.0 - uMinAlpha)) * smoothstep(0.0, 0.35, facing) * (1.0 - 0.3 * sweep);
+        gl_PointSize = (0.5 + pow(aRand.x, 3.0) * uSizeVar) * uSize; // mostly fine grains, a few chunky ones
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uColorA;
@@ -113,7 +129,6 @@ function buildLandDots(colors, samples = 90000) {
     transparent: true,
     depthWrite: false,
   });
-  return new THREE.Points(geometry, material);
 }
 
 // A soft, light sphere that fades into the page at its edges.
@@ -142,10 +157,10 @@ function buildOcean(colors) {
 }
 
 function buildAtmosphere(color) {
-  const mesh = new THREE.Mesh(
+  return new THREE.Mesh(
     new THREE.SphereGeometry(R, 64, 64),
     new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: color } },
+      uniforms: { uColor: { value: color }, uStrength: { value: 1 } },
       vertexShader: /* glsl */ `
         varying vec3 vNormal;
         void main() {
@@ -154,10 +169,11 @@ function buildAtmosphere(color) {
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
+        uniform float uStrength;
         varying vec3 vNormal;
         void main() {
           float i = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);
-          gl_FragColor = vec4(uColor, clamp(i, 0.0, 1.0));
+          gl_FragColor = vec4(uColor, clamp(i * uStrength, 0.0, 1.0));
           #include <colorspace_fragment>
         }`,
       side: THREE.BackSide,
@@ -165,25 +181,26 @@ function buildAtmosphere(color) {
       depthWrite: false,
     }),
   );
-  mesh.scale.setScalar(1.12);
-  return mesh;
 }
 
-// A tall arc that draws itself in, with a pulse that travels from farm to roastery.
-function buildArc(from, to, colors, offset) {
+function buildArcGeometry(from, to, height, thickness) {
   const a = from.clone().normalize();
   const b = to.clone().normalize();
-  const angle = a.angleTo(b);
-  const lift = R * (1 + angle * 0.3);
+  const lift = R * (1 + a.angleTo(b) * height);
   const curve = new THREE.CubicBezierCurve3(
     a.clone().multiplyScalar(R),
     slerpVectors(a, b, 0.25).multiplyScalar(lift),
     slerpVectors(a, b, 0.75).multiplyScalar(lift),
     b.clone().multiplyScalar(R),
   );
-  const material = new THREE.ShaderMaterial({
+  return new THREE.TubeGeometry(curve, 128, thickness, 6, false);
+}
+
+// A tall arc that draws itself in, with a pulse that travels from farm to roastery.
+function buildArcMaterial(colors, shared, offset) {
+  return new THREE.ShaderMaterial({
     uniforms: {
-      uTime: { value: 0 },
+      ...shared,
       uProgress: { value: 0 },
       uOpacity: { value: 0.9 },
       uOffset: { value: offset },
@@ -206,7 +223,7 @@ function buildArc(from, to, colors, offset) {
       varying vec2 vUv;
       void main() {
         if (vUv.x > uProgress) discard;
-        float pulse = smoothstep(0.1, 0.0, abs(fract(uTime * 0.15 + uOffset) - vUv.x));
+        float pulse = smoothstep(0.1, 0.0, abs(fract(uTime + uOffset) - vUv.x));
         float tip = smoothstep(uProgress - 0.1, uProgress, vUv.x) * step(uProgress, 0.999);
         float alpha = uOpacity * (0.55 + 0.45 * max(pulse, tip)) * smoothstep(0.0, 0.03, vUv.x);
         gl_FragColor = vec4(mix(uColorA, uColorB, vUv.x), alpha);
@@ -215,16 +232,15 @@ function buildArc(from, to, colors, offset) {
     transparent: true,
     depthWrite: false,
   });
-  return new THREE.Mesh(new THREE.TubeGeometry(curve, 128, 0.0045, 6, false), material);
 }
 
 // Flat ring marker with a soft halo, lying on the globe's surface.
-function buildMarker(ringColor, haloColor) {
+function buildMarker() {
   const group = new THREE.Group();
   const halo = new THREE.Mesh(
     new THREE.CircleGeometry(0.06, 40),
     new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: haloColor.clone() } },
+      uniforms: { uColor: { value: new THREE.Color() } },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
         void main() {
@@ -245,7 +261,7 @@ function buildMarker(ringColor, haloColor) {
   );
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.013, 0.02, 40),
-    new THREE.MeshBasicMaterial({ color: ringColor.clone(), side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }),
   );
   const core = new THREE.Mesh(
     new THREE.CircleGeometry(0.013, 32),
@@ -253,7 +269,7 @@ function buildMarker(ringColor, haloColor) {
   );
   const pulse = new THREE.Mesh(
     new THREE.RingGeometry(0.02, 0.023, 40),
-    new THREE.MeshBasicMaterial({ color: ringColor.clone(), transparent: true, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide, depthWrite: false }),
   );
   ring.position.z = 0.001;
   core.position.z = 0.0012;
@@ -268,28 +284,17 @@ function buildMarker(ringColor, haloColor) {
 
 function readColors(el) {
   const css = getComputedStyle(el);
-  const get = (name, fallback) => new THREE.Color(css.getPropertyValue(name).trim() || fallback);
-  return {
-    ocean: get('--cf-globe-ocean', '#fffdfd'),
-    shade: get('--cf-globe-shade', '#e8e4f2'),
-    landA: get('--cf-globe-land-a', '#9cbde7'),
-    landB: get('--cf-globe-land-b', '#413549'),
-    landC: get('--cf-globe-land-c', '#d2aed5'),
-    glow: get('--cf-globe-glow', '#fffdfd'),
-    pin: get('--cf-globe-pin', '#413549'),
-    halo: get('--cf-globe-halo', '#d2aed5'),
-    pinActive: get('--cf-globe-pin-active', '#9cbde7'),
-    arcA: get('--cf-globe-arc-a', '#d2aed5'),
-    arcB: get('--cf-globe-arc-b', '#413549'),
-    home: get('--cf-globe-home', '#9cbde7'),
-  };
+  return Object.fromEntries(
+    Object.entries(COLOR_TOKENS).map(([key, token]) => [key, new THREE.Color(css.getPropertyValue(token).trim() || '#ff00ff')]),
+  );
 }
 
 /**
  * Mounts an interactive partner globe into `container`.
- * Colours are read from CSS custom properties (--cf-globe-*) on the container.
+ * Colours are read from CSS custom properties (COLOR_TOKENS) on the container;
+ * everything else comes from `settings` (see settings.js).
  */
-export function createPartnerGlobe(container, { partners, home, onSelect, onHover }) {
+export function createPartnerGlobe(container, { partners, home, settings, onSelect, onHover }) {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const colors = readColors(container);
 
@@ -299,11 +304,14 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+  const distance = () => BASE_DISTANCE / settings.size;
 
+  const isLand = buildLandMask();
   const globe = new THREE.Group();
   const ocean = buildOcean(colors);
-  const dots = buildLandDots(colors);
-  globe.add(ocean, dots, buildAtmosphere(colors.glow));
+  const dots = new THREE.Points(buildDotGeometry(isLand, settings.dotDensity), buildDotMaterial(colors));
+  const atmosphere = buildAtmosphere(colors.glow);
+  globe.add(ocean, dots, atmosphere);
   scene.add(globe);
 
   const zAxis = new THREE.Vector3(0, 0, 1);
@@ -328,25 +336,25 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
   }
 
   const homeNormal = latLngToVector3(home.lat, home.lng);
-  const homeMarker = buildMarker(colors.home, colors.home);
+  const homeMarker = { ...buildMarker(), phase: 0.5, scale: 1 };
   placeMarker(homeMarker, homeNormal);
   homeMarker.hit.removeFromParent();
   globe.add(homeMarker.group);
 
+  const arcUniforms = { uTime: { value: 0 } };
+  const introProgress = (index) => (reducedMotion ? 1 : -0.6 - index * 0.25);
   const pins = partners.map((partner, index) => {
     const position = displayNormal(partner);
-    const marker = buildMarker(colors.pin, colors.halo);
+    const marker = buildMarker();
     placeMarker(marker, position);
     marker.hit.userData.partnerId = partner.id;
-    const arc = buildArc(position, homeNormal, colors, index / partners.length);
+    const arc = new THREE.Mesh(
+      buildArcGeometry(position, homeNormal, settings.arcHeight, settings.arcThickness),
+      buildArcMaterial(colors, arcUniforms, index / partners.length),
+    );
     globe.add(marker.group, arc);
-    return {
-      partner, position, arc, ...marker,
-      phase: index * 0.17,
-      scale: 1,
-      // Arcs draw in one after another once the globe has popped in.
-      progress: reducedMotion ? 1 : -0.6 - index * 0.25,
-    };
+    // Arcs draw in one after another once the globe has popped in.
+    return { partner, position, arc, ...marker, phase: index * 0.17, scale: 1, progress: introProgress(index) };
   });
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -355,11 +363,9 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.rotateSpeed = 0.55;
-  controls.autoRotate = !reducedMotion;
-  controls.autoRotateSpeed = 0.6;
 
   // Open on the Americas, where most partners are, with their arcs swinging off towards the roastery.
-  camera.position.copy(latLngToVector3(14, -95, CAMERA_DISTANCE));
+  camera.position.copy(latLngToVector3(14, -95, distance()));
   controls.update();
 
   let selectedId = null;
@@ -369,12 +375,57 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
   let viewOffset = 0;
   let targetOffset = 0;
 
+  // Applies colours + selection state to markers and arcs.
+  function paint() {
+    pins.forEach((p) => {
+      const active = p.partner.id === selectedId;
+      p.ring.material.color.copy(colors.pin);
+      p.pulse.material.color.copy(colors.pin);
+      p.halo.material.uniforms.uColor.value.copy(active ? colors.pinActive : colors.halo);
+      p.arc.material.uniforms.uOpacity.value = !selectedId ? settings.arcOpacity : active ? 1 : settings.arcOpacity * 0.22;
+    });
+    homeMarker.ring.material.color.copy(colors.home);
+    homeMarker.pulse.material.color.copy(colors.home);
+    homeMarker.halo.material.uniforms.uColor.value.copy(colors.home);
+  }
+
+  function updateDotSize() {
+    const { height } = container.getBoundingClientRect();
+    // Dot size tracks the globe's on-screen size.
+    dots.material.uniforms.uSize.value = ((height * camera.zoom) / 480) * renderer.getPixelRatio() * settings.dotSize;
+  }
+
+  // Pushes `settings` into the scene. `changed` says which keys moved, so only
+  // the expensive rebuilds (dots, arc geometry) that are needed happen.
+  function applySettings(changed = {}) {
+    if ('dotDensity' in changed) {
+      dots.geometry.dispose();
+      dots.geometry = buildDotGeometry(isLand, settings.dotDensity);
+    }
+    if ('arcHeight' in changed || 'arcThickness' in changed) {
+      pins.forEach((p) => {
+        p.arc.geometry.dispose();
+        p.arc.geometry = buildArcGeometry(p.position, homeNormal, settings.arcHeight, settings.arcThickness);
+      });
+    }
+    if ('size' in changed) camera.position.setLength(distance());
+    controls.autoRotate = settings.autoRotate && !selectedId && !reducedMotion;
+    controls.autoRotateSpeed = settings.rotateSpeed;
+    atmosphere.material.uniforms.uStrength.value = settings.glowStrength;
+    atmosphere.scale.setScalar(settings.glowSize);
+    dots.material.uniforms.uSizeVar.value = settings.dotSizeVariation;
+    dots.material.uniforms.uMinAlpha.value = settings.dotOpacity;
+    dots.material.uniforms.uJitter.value = settings.colorJitter;
+    updateDotSize();
+    paint();
+  }
+
   function flyTo(position) {
     const from = camera.position.clone().normalize();
     // Look from slightly above the pin so it sits in the upper-middle of the view.
     const to = position.clone().normalize().add(new THREE.Vector3(0, 0.25, 0)).normalize();
     if (reducedMotion) {
-      camera.position.copy(to.multiplyScalar(CAMERA_DISTANCE));
+      camera.position.copy(to.multiplyScalar(distance()));
       return;
     }
     flight = { from, to, t: 0 };
@@ -383,13 +434,9 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
   function select(id) {
     selectedId = id;
     const pin = pins.find((p) => p.partner.id === id);
-    pins.forEach((p) => {
-      const active = p === pin;
-      p.halo.material.uniforms.uColor.value.copy(active ? colors.pinActive : colors.halo);
-      p.arc.material.uniforms.uOpacity.value = !pin ? 0.9 : active ? 1 : 0.2;
-      if (active && !reducedMotion) p.progress = 0; // redraw the selected route
-    });
-    controls.autoRotate = !pin && !reducedMotion;
+    if (pin && !reducedMotion) pin.progress = 0; // redraw the selected route
+    controls.autoRotate = !pin && settings.autoRotate && !reducedMotion;
+    paint();
     if (pin) flyTo(pin.position);
     onSelect?.(pin ? pin.partner : null);
   }
@@ -449,12 +496,12 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
     camera.zoom = Math.min(1, camera.aspect * 1.05);
     applyViewOffset();
     camera.updateProjectionMatrix();
-    // Dot size tracks the globe's on-screen size.
-    dots.material.uniforms.uSize.value = ((height * camera.zoom) / 480) * renderer.getPixelRatio();
+    updateDotSize();
   }
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);
   resize();
+  applySettings();
 
   // Only animate while the globe is on screen.
   let visible = true;
@@ -482,23 +529,25 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
 
     if (flight) {
       flight.t = Math.min(1, flight.t + dt / 1.1);
-      camera.position.copy(slerpVectors(flight.from, flight.to, easeInOut(flight.t)).multiplyScalar(CAMERA_DISTANCE));
+      camera.position.copy(slerpVectors(flight.from, flight.to, easeInOut(flight.t)).multiplyScalar(distance()));
       if (flight.t === 1) flight = null;
     }
 
-    pins.forEach((p) => {
-      const id = p.partner.id;
-      const target = id === selectedId ? 1.5 : id === hoveredId ? 1.3 : 1;
+    if (!reducedMotion) arcUniforms.uTime.value += dt * settings.pulseSpeed;
+    [homeMarker, ...pins].forEach((p) => {
+      const id = p.partner?.id;
+      const target = id && id === selectedId ? 1.5 : id && id === hoveredId ? 1.3 : 1;
       p.scale += (target - p.scale) * Math.min(1, dt * 12);
-      p.group.scale.setScalar(p.scale);
-      if (p.progress < 1) p.progress = Math.min(1, p.progress + dt * 0.8);
-      p.arc.material.uniforms.uProgress.value = Math.max(0, easeInOut(Math.max(0, p.progress)));
+      p.group.scale.setScalar(p.scale * settings.markerSize);
       if (!reducedMotion) {
-        const beat = (time * 0.5 + p.phase) % 1;
+        const beat = (time * settings.markerPulse + p.phase) % 1;
         p.pulse.scale.setScalar(1 + beat * 2.2);
-        p.pulse.material.opacity = 0.6 * (1 - beat);
-        p.arc.material.uniforms.uTime.value = time;
+        p.pulse.material.opacity = settings.markerPulse ? 0.6 * (1 - beat) : 0;
       }
+    });
+    pins.forEach((p) => {
+      if (p.progress < 1) p.progress = Math.min(1, p.progress + dt * settings.drawSpeed);
+      p.arc.material.uniforms.uProgress.value = easeInOut(Math.max(0, p.progress));
     });
 
     controls.update();
@@ -510,6 +559,22 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
     clear: () => select(null),
     /** Pixels to shift the globe right (+) or left (−) of centre. */
     setOffset(px) { targetOffset = -px; },
+    /** Merge new values into `settings` and apply them live. */
+    updateSettings(changed) {
+      Object.assign(settings, changed);
+      applySettings(changed);
+    },
+    /** Live-update one of the COLOR_TOKENS colours. */
+    setColor(key, value) {
+      colors[key].set(value);
+      paint();
+    },
+    /** Replays the pop-in and arc draw-in animation. */
+    replayIntro() {
+      if (reducedMotion) return;
+      intro = 0;
+      pins.forEach((p, index) => { p.progress = introProgress(index); });
+    },
     /** Screen position (px, relative to container) of a partner's marker, or null if it's behind the globe. */
     screenPosition(id) {
       const pin = pins.find((p) => p.partner.id === id);
