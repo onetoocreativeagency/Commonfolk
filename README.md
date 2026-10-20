@@ -16,7 +16,7 @@ npm run build    # production bundle in dist/
 | --- | --- |
 | `src/partners.js` | **The content.** One entry per partner: name, farm, location, story, partner-page URL, latest coffee. Edit this to add/update partners. |
 | `src/globe.js` | The 3D globe. Dotted land (sampled from Natural Earth via `world-atlas`), pins, animated arcs back to the Mornington roastery, drag/auto-rotate, fly-to-partner. |
-| `src/main.js` | Card, tooltip and partner list UI wired to the globe. |
+| `src/main.js` | Card, floating chips and partner list UI wired to the globe. |
 | `src/style.css` | Brand tokens + layout. Colours come from the *Commonfolk – UI 2024* Figma file. |
 
 ### Interaction

@@ -6,7 +6,8 @@ const root = document.querySelector('.cf-partners');
 const $ = (selector) => root.querySelector(selector);
 
 const card = $('[data-card]');
-const tooltip = $('[data-tooltip]');
+const chip = $('[data-chip]');
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const hint = $('[data-hint]');
 const list = $('[data-list]');
 const sideBySide = window.matchMedia('(min-width: 761px)');
@@ -63,23 +64,21 @@ const buttons = partners.map((partner) => {
   button.textContent = partner.name;
   button.setAttribute('aria-pressed', 'false');
   button.addEventListener('click', () => globe.select(partner.id));
-  button.addEventListener('mouseenter', () => showTooltip(partner));
-  button.addEventListener('mouseleave', () => showTooltip(null));
+  button.addEventListener('mouseenter', () => { hovered = partner; });
+  button.addEventListener('mouseleave', () => { hovered = null; });
   list.append(button);
   return button;
 });
 
-let tooltipFor = null;
-function showTooltip(partner) {
-  tooltipFor = partner;
-  tooltip.hidden = !partner;
-  if (partner) tooltip.textContent = `${partner.name} · ${partner.country}`;
-}
+// Floating chip: shows the hovered partner, otherwise cycles through the ones facing us.
+let hovered = null;
+let ambient = null;
+let chipFor = null;
 
 const globe = createPartnerGlobe($('[data-globe]'), {
   partners,
   home,
-  onHover: showTooltip,
+  onHover: (partner) => { hovered = partner; },
   onSelect(partner) {
     card.hidden = !partner;
     buttons.forEach((b, i) => b.setAttribute('aria-pressed', String(partners[i] === partner)));
@@ -88,20 +87,31 @@ const globe = createPartnerGlobe($('[data-globe]'), {
     if (partner) {
       render(partner);
       hint.style.opacity = 0;
-      showTooltip(null);
     }
   },
 });
 
-// Keep the tooltip pinned to its pin as the globe turns.
-(function followTooltip() {
-  if (tooltipFor) {
-    const pos = globe.screenPosition(tooltipFor.id);
-    tooltip.hidden = !pos;
-    if (pos) tooltip.style.translate = `${pos.x}px ${pos.y}px`;
+(function followChip() {
+  const partner = card.hidden ? hovered ?? ambient : null;
+  const pos = partner && globe.screenPosition(partner.id);
+  if (partner !== chipFor) {
+    chipFor = partner;
+    if (partner) {
+      $('[data-chip-swatch]').style.background = ART[partners.indexOf(partner) % ART.length][1];
+      $('[data-chip-title]').textContent = partner.name;
+      $('[data-chip-meta]').textContent = partner.country;
+      if (!reduceMotion.matches) chip.animate([{ opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1 }], { duration: 280, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' });
+    }
   }
-  requestAnimationFrame(followTooltip);
+  chip.hidden = !pos;
+  if (pos) chip.style.translate = `${pos.x}px ${pos.y}px`;
+  requestAnimationFrame(followChip);
 })();
+
+setInterval(() => {
+  const facing = partners.filter((p) => globe.screenPosition(p.id));
+  ambient = facing.length ? facing[(facing.indexOf(ambient) + 1) % facing.length] : null;
+}, 3000);
 
 function step(delta) {
   const current = buttons.findIndex((b) => b.getAttribute('aria-pressed') === 'true');

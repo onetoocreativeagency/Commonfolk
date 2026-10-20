@@ -6,7 +6,7 @@ import land110 from 'world-atlas/land-110m.json';
 
 const R = 1;
 const DEG = Math.PI / 180;
-const CAMERA_DISTANCE = 4.6;
+const CAMERA_DISTANCE = 4.2;
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const easeOutBack = (t) => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2);
@@ -48,38 +48,80 @@ function buildLandMask(width = 2048, height = 1024) {
   };
 }
 
-function buildLandDots(color, spacing = 1.35) {
+// Randomly scattered "stipple" dots over land, tinted by a screen-space gradient.
+function buildLandDots(colors, samples = 90000) {
   const isLand = buildLandMask();
-  const points = [];
-  for (let lat = -58; lat <= 84; lat += spacing) {
-    const count = Math.round((360 * Math.cos(lat * DEG)) / spacing);
-    for (let i = 0; i < count; i++) {
-      const lng = -180 + (i / count) * 360;
-      if (isLand(lat, lng)) points.push([lat, lng]);
-    }
+  const positions = [];
+  const sizes = [];
+  const alphas = [];
+  const jitters = [];
+  for (let i = 0; i < samples; i++) {
+    const lat = Math.asin(Math.random() * 2 - 1) / DEG; // uniform over the sphere
+    const lng = Math.random() * 360 - 180;
+    if (lat < -60 || !isLand(lat, lng)) continue;
+    const p = latLngToVector3(lat, lng, R * 1.002);
+    positions.push(p.x, p.y, p.z);
+    sizes.push(0.5 + Math.random() ** 3 * 1.6); // mostly fine grains, a few chunky ones
+    alphas.push(0.55 + Math.random() * 0.45);
+    jitters.push(Math.random() - 0.5);
   }
 
-  const geometry = new THREE.CircleGeometry(0.0075, 10);
-  const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
-  const mesh = new THREE.InstancedMesh(geometry, material, points.length);
-  const dummy = new THREE.Object3D();
-  const tint = new THREE.Color();
-  points.forEach(([lat, lng], i) => {
-    dummy.position.copy(latLngToVector3(lat, lng, R * 1.001));
-    dummy.lookAt(dummy.position.clone().multiplyScalar(2));
-    dummy.scale.setScalar(0.8 + Math.random() * 0.45); // a bit of hand-made wobble
-    dummy.updateMatrix();
-    mesh.setMatrixAt(i, dummy.matrix);
-    mesh.setColorAt(i, tint.set(0xffffff).multiplyScalar(0.88 + Math.random() * 0.12));
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1));
+  geometry.setAttribute('aAlpha', new THREE.Float32BufferAttribute(alphas, 1));
+  geometry.setAttribute('aJitter', new THREE.Float32BufferAttribute(jitters, 1));
+
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uSize: { value: 2 },
+      uColorA: { value: colors.landA },
+      uColorB: { value: colors.landB },
+      uColorC: { value: colors.landC },
+    },
+    vertexShader: /* glsl */ `
+      attribute float aSize;
+      attribute float aAlpha;
+      attribute float aJitter;
+      uniform float uSize;
+      varying float vAlpha;
+      varying float vGrad;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        float facing = dot(normalize(normalMatrix * position), normalize(-mv.xyz));
+        gl_Position = projectionMatrix * mv;
+        vec2 ndc = gl_Position.xy / gl_Position.w;
+        // Diagonal sweep bottom-left → top-right, jittered per dot for a confetti mix.
+        float sweep = clamp(0.5 + ndc.x * 0.45 + ndc.y * 0.3, 0.0, 1.0);
+        vGrad = clamp(sweep + aJitter * 0.7, 0.0, 1.0);
+        vAlpha = aAlpha * smoothstep(0.0, 0.35, facing) * (1.0 - 0.3 * sweep);
+        gl_PointSize = aSize * uSize;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColorA;
+      uniform vec3 uColorB;
+      uniform vec3 uColorC;
+      varying float vAlpha;
+      varying float vGrad;
+      void main() {
+        vec2 c = gl_PointCoord - 0.5;
+        if (dot(c, c) > 0.25) discard;
+        vec3 col = vGrad < 0.5 ? mix(uColorA, uColorB, vGrad * 2.0) : mix(uColorB, uColorC, vGrad * 2.0 - 1.0);
+        gl_FragColor = vec4(col, vAlpha);
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
   });
-  return mesh;
+  return new THREE.Points(geometry, material);
 }
 
-function buildOcean(color) {
+// A soft, light sphere that fades into the page at its edges.
+function buildOcean(colors) {
   return new THREE.Mesh(
     new THREE.SphereGeometry(R, 64, 64),
     new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: color } },
+      uniforms: { uColor: { value: colors.ocean }, uShade: { value: colors.shade } },
       vertexShader: /* glsl */ `
         varying vec3 vNormal;
         void main() {
@@ -88,11 +130,11 @@ function buildOcean(color) {
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
+        uniform vec3 uShade;
         varying vec3 vNormal;
         void main() {
-          float light = dot(vNormal, normalize(vec3(-0.4, 0.5, 1.0)));
-          vec3 c = uColor * (0.82 + 0.3 * max(light, 0.0));
-          gl_FragColor = vec4(c, 1.0);
+          float light = clamp(dot(vNormal, normalize(vec3(0.45, 0.55, 1.0))), 0.0, 1.0);
+          gl_FragColor = vec4(mix(uShade, uColor, smoothstep(0.05, 0.85, light)), 1.0);
           #include <colorspace_fragment>
         }`,
     }),
@@ -114,7 +156,7 @@ function buildAtmosphere(color) {
         uniform vec3 uColor;
         varying vec3 vNormal;
         void main() {
-          float i = pow(0.72 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.5);
+          float i = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);
           gl_FragColor = vec4(uColor, clamp(i, 0.0, 1.0));
           #include <colorspace_fragment>
         }`,
@@ -123,15 +165,16 @@ function buildAtmosphere(color) {
       depthWrite: false,
     }),
   );
-  mesh.scale.setScalar(1.16);
+  mesh.scale.setScalar(1.12);
   return mesh;
 }
 
-function buildArc(from, to, color) {
+// A tall arc that draws itself in, with a pulse that travels from farm to roastery.
+function buildArc(from, to, colors, offset) {
   const a = from.clone().normalize();
   const b = to.clone().normalize();
   const angle = a.angleTo(b);
-  const lift = R * (1 + angle * 0.22);
+  const lift = R * (1 + angle * 0.3);
   const curve = new THREE.CubicBezierCurve3(
     a.clone().multiplyScalar(R),
     slerpVectors(a, b, 0.25).multiplyScalar(lift),
@@ -141,9 +184,11 @@ function buildArc(from, to, color) {
   const material = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
-      uColor: { value: color },
-      uOpacity: { value: 0.45 },
-      uDashes: { value: Math.max(6, Math.round(angle * 9)) },
+      uProgress: { value: 0 },
+      uOpacity: { value: 0.9 },
+      uOffset: { value: offset },
+      uColorA: { value: colors.arcA },
+      uColorB: { value: colors.arcB },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -151,60 +196,91 @@ function buildArc(from, to, color) {
         vUv = uv;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
-    // Dashes travel from the farm towards the roastery.
     fragmentShader: /* glsl */ `
       uniform float uTime;
-      uniform vec3 uColor;
+      uniform float uProgress;
       uniform float uOpacity;
-      uniform float uDashes;
+      uniform float uOffset;
+      uniform vec3 uColorA;
+      uniform vec3 uColorB;
       varying vec2 vUv;
       void main() {
-        float dash = step(0.5, fract(vUv.x * uDashes - uTime * 0.5));
-        float ends = smoothstep(0.0, 0.06, vUv.x) * smoothstep(1.0, 0.94, vUv.x);
-        gl_FragColor = vec4(uColor, (0.2 + 0.8 * dash) * ends * uOpacity);
+        if (vUv.x > uProgress) discard;
+        float pulse = smoothstep(0.1, 0.0, abs(fract(uTime * 0.15 + uOffset) - vUv.x));
+        float tip = smoothstep(uProgress - 0.1, uProgress, vUv.x) * step(uProgress, 0.999);
+        float alpha = uOpacity * (0.55 + 0.45 * max(pulse, tip)) * smoothstep(0.0, 0.03, vUv.x);
+        gl_FragColor = vec4(mix(uColorA, uColorB, vUv.x), alpha);
         #include <colorspace_fragment>
       }`,
     transparent: true,
     depthWrite: false,
   });
-  return new THREE.Mesh(new THREE.TubeGeometry(curve, 96, 0.0045, 6, false), material);
+  return new THREE.Mesh(new THREE.TubeGeometry(curve, 128, 0.0045, 6, false), material);
 }
 
-function buildPin(color) {
+// Flat ring marker with a soft halo, lying on the globe's surface.
+function buildMarker(ringColor, haloColor) {
   const group = new THREE.Group();
-  const stick = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.0035, 0.0035, 0.07, 8),
-    new THREE.MeshBasicMaterial({ color }),
+  const halo = new THREE.Mesh(
+    new THREE.CircleGeometry(0.06, 40),
+    new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: haloColor.clone() } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uColor;
+        varying vec2 vUv;
+        void main() {
+          float d = length(vUv - 0.5) * 2.0;
+          gl_FragColor = vec4(uColor, pow(1.0 - clamp(d, 0.0, 1.0), 2.0) * 0.8);
+          #include <colorspace_fragment>
+        }`,
+      transparent: true,
+      depthWrite: false,
+    }),
   );
-  stick.position.y = 0.035;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.026, 24, 24), new THREE.MeshBasicMaterial({ color }));
-  head.position.y = 0.08;
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.02, 0.028, 32),
-    new THREE.MeshBasicMaterial({ color, transparent: true, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.RingGeometry(0.013, 0.02, 40),
+    new THREE.MeshBasicMaterial({ color: ringColor.clone(), side: THREE.DoubleSide }),
   );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.002;
-  // Generous invisible hit target so pins are easy to tap.
+  const core = new THREE.Mesh(
+    new THREE.CircleGeometry(0.013, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffffff }),
+  );
+  const pulse = new THREE.Mesh(
+    new THREE.RingGeometry(0.02, 0.023, 40),
+    new THREE.MeshBasicMaterial({ color: ringColor.clone(), transparent: true, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  ring.position.z = 0.001;
+  core.position.z = 0.0012;
+  // Generous invisible hit target so markers are easy to tap.
   const hit = new THREE.Mesh(
-    new THREE.SphereGeometry(0.05, 12, 12),
+    new THREE.SphereGeometry(0.045, 12, 12),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
   );
-  hit.position.y = 0.06;
-  group.add(stick, head, ring, hit);
-  return { group, stick, head, ring, hit };
+  group.add(halo, pulse, ring, core, hit);
+  return { group, halo, ring, pulse, hit };
 }
 
 function readColors(el) {
   const css = getComputedStyle(el);
   const get = (name, fallback) => new THREE.Color(css.getPropertyValue(name).trim() || fallback);
   return {
-    ocean: get('--cf-globe-ocean', '#413549'),
-    land: get('--cf-globe-land', '#fffdfd'),
-    glow: get('--cf-globe-glow', '#9cbde7'),
-    pin: get('--cf-globe-pin', '#d2aed5'),
+    ocean: get('--cf-globe-ocean', '#fffdfd'),
+    shade: get('--cf-globe-shade', '#e8e4f2'),
+    landA: get('--cf-globe-land-a', '#9cbde7'),
+    landB: get('--cf-globe-land-b', '#413549'),
+    landC: get('--cf-globe-land-c', '#d2aed5'),
+    glow: get('--cf-globe-glow', '#fffdfd'),
+    pin: get('--cf-globe-pin', '#413549'),
+    halo: get('--cf-globe-halo', '#d2aed5'),
     pinActive: get('--cf-globe-pin-active', '#9cbde7'),
-    arc: get('--cf-globe-arc', '#d2aed5'),
+    arcA: get('--cf-globe-arc-a', '#d2aed5'),
+    arcB: get('--cf-globe-arc-b', '#413549'),
     home: get('--cf-globe-home', '#9cbde7'),
   };
 }
@@ -225,39 +301,52 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
 
   const globe = new THREE.Group();
-  const ocean = buildOcean(colors.ocean);
-  globe.add(ocean, buildLandDots(colors.land), buildAtmosphere(colors.glow));
+  const ocean = buildOcean(colors);
+  const dots = buildLandDots(colors);
+  globe.add(ocean, dots, buildAtmosphere(colors.glow));
   scene.add(globe);
 
-  const homePos = latLngToVector3(home.lat, home.lng);
-  const homeMarker = new THREE.Mesh(new THREE.SphereGeometry(0.02, 16, 16), new THREE.MeshBasicMaterial({ color: colors.home }));
-  homeMarker.position.copy(homePos);
-  globe.add(homeMarker);
+  const zAxis = new THREE.Vector3(0, 0, 1);
+  function placeMarker(marker, normal) {
+    marker.group.position.copy(normal).multiplyScalar(R * 1.004);
+    marker.group.quaternion.setFromUnitVectors(zAxis, normal);
+  }
 
-  // Pins that sit almost on top of each other (e.g. neighbouring farms) lean
-  // apart so each one stays visible and clickable.
-  function pinUp(partner, position) {
-    const normal = position.clone().normalize();
-    const lean = new THREE.Vector3();
+  // Markers that sit almost on top of each other (e.g. neighbouring farms) are
+  // nudged apart so each one stays visible and clickable.
+  function displayNormal(partner) {
+    const position = latLngToVector3(partner.lat, partner.lng);
+    const nudge = new THREE.Vector3();
     partners.forEach((other) => {
       if (other === partner) return;
       const otherPos = latLngToVector3(other.lat, other.lng);
       if (otherPos.angleTo(position) > 0.05) return;
       const away = position.clone().sub(otherPos);
-      lean.add(away.sub(normal.clone().multiplyScalar(away.dot(normal))).normalize());
+      nudge.add(away.sub(position.clone().multiplyScalar(away.dot(position))).normalize());
     });
-    return lean.lengthSq() ? normal.add(lean.normalize().multiplyScalar(0.7)).normalize() : normal;
+    return nudge.lengthSq() ? position.add(nudge.normalize().multiplyScalar(0.03)).normalize() : position;
   }
 
+  const homeNormal = latLngToVector3(home.lat, home.lng);
+  const homeMarker = buildMarker(colors.home, colors.home);
+  placeMarker(homeMarker, homeNormal);
+  homeMarker.hit.removeFromParent();
+  globe.add(homeMarker.group);
+
   const pins = partners.map((partner, index) => {
-    const position = latLngToVector3(partner.lat, partner.lng);
-    const pin = buildPin(colors.pin);
-    pin.group.position.copy(position);
-    pin.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pinUp(partner, position));
-    pin.hit.userData.partnerId = partner.id;
-    const arc = buildArc(position, homePos, colors.arc);
-    globe.add(pin.group, arc);
-    return { partner, position, arc, ...pin, phase: index * 1.3, scale: 1, targetScale: 1 };
+    const position = displayNormal(partner);
+    const marker = buildMarker(colors.pin, colors.halo);
+    placeMarker(marker, position);
+    marker.hit.userData.partnerId = partner.id;
+    const arc = buildArc(position, homeNormal, colors, index / partners.length);
+    globe.add(marker.group, arc);
+    return {
+      partner, position, arc, ...marker,
+      phase: index * 0.17,
+      scale: 1,
+      // Arcs draw in one after another once the globe has popped in.
+      progress: reducedMotion ? 1 : -0.6 - index * 0.25,
+    };
   });
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -267,10 +356,10 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
   controls.dampingFactor = 0.08;
   controls.rotateSpeed = 0.55;
   controls.autoRotate = !reducedMotion;
-  controls.autoRotateSpeed = 0.7;
+  controls.autoRotateSpeed = 0.6;
 
-  // Start looking at the roastery's side of the world, tilted a touch north.
-  camera.position.copy(latLngToVector3(10, 160, CAMERA_DISTANCE));
+  // Open on the Americas, where most partners are, with their arcs swinging off towards the roastery.
+  camera.position.copy(latLngToVector3(14, -95, CAMERA_DISTANCE));
   controls.update();
 
   let selectedId = null;
@@ -296,10 +385,9 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
     const pin = pins.find((p) => p.partner.id === id);
     pins.forEach((p) => {
       const active = p === pin;
-      p.head.material.color.copy(active ? colors.pinActive : colors.pin);
-      p.stick.material.color.copy(active ? colors.pinActive : colors.pin);
-      p.ring.material.color.copy(active ? colors.pinActive : colors.pin);
-      p.arc.material.uniforms.uOpacity.value = !pin ? 0.45 : active ? 1 : 0.15;
+      p.halo.material.uniforms.uColor.value.copy(active ? colors.pinActive : colors.halo);
+      p.arc.material.uniforms.uOpacity.value = !pin ? 0.9 : active ? 1 : 0.2;
+      if (active && !reducedMotion) p.progress = 0; // redraw the selected route
     });
     controls.autoRotate = !pin && !reducedMotion;
     if (pin) flyTo(pin.position);
@@ -361,6 +449,8 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
     camera.zoom = Math.min(1, camera.aspect * 1.05);
     applyViewOffset();
     camera.updateProjectionMatrix();
+    // Dot size tracks the globe's on-screen size.
+    dots.material.uniforms.uSize.value = ((height * camera.zoom) / 480) * renderer.getPixelRatio();
   }
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);
@@ -398,14 +488,15 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
 
     pins.forEach((p) => {
       const id = p.partner.id;
-      p.targetScale = id === selectedId ? 1.45 : id === hoveredId ? 1.3 : 1;
-      p.scale += (p.targetScale - p.scale) * Math.min(1, dt * 12);
+      const target = id === selectedId ? 1.5 : id === hoveredId ? 1.3 : 1;
+      p.scale += (target - p.scale) * Math.min(1, dt * 12);
       p.group.scale.setScalar(p.scale);
+      if (p.progress < 1) p.progress = Math.min(1, p.progress + dt * 0.8);
+      p.arc.material.uniforms.uProgress.value = Math.max(0, easeInOut(Math.max(0, p.progress)));
       if (!reducedMotion) {
-        p.head.position.y = 0.08 + Math.sin(time * 2.2 + p.phase) * 0.006;
-        const pulse = (time * 0.6 + p.phase * 0.1) % 1;
-        p.ring.scale.setScalar(1 + pulse * 2.4);
-        p.ring.material.opacity = 0.7 * (1 - pulse);
+        const beat = (time * 0.5 + p.phase) % 1;
+        p.pulse.scale.setScalar(1 + beat * 2.2);
+        p.pulse.material.opacity = 0.6 * (1 - beat);
         p.arc.material.uniforms.uTime.value = time;
       }
     });
@@ -419,12 +510,12 @@ export function createPartnerGlobe(container, { partners, home, onSelect, onHove
     clear: () => select(null),
     /** Pixels to shift the globe right (+) or left (−) of centre. */
     setOffset(px) { targetOffset = -px; },
-    /** Screen position (px, relative to container) of a partner's pin, or null if it's behind the globe. */
+    /** Screen position (px, relative to container) of a partner's marker, or null if it's behind the globe. */
     screenPosition(id) {
       const pin = pins.find((p) => p.partner.id === id);
       if (!pin) return null;
-      pin.head.getWorldPosition(screen);
-      const facing = screen.clone().normalize().dot(camera.position.clone().normalize()) > 0.15;
+      pin.group.getWorldPosition(screen);
+      const facing = screen.clone().normalize().dot(camera.position.clone().normalize()) > 0.2;
       screen.project(camera);
       const { width, height } = container.getBoundingClientRect();
       return facing ? { x: (screen.x * 0.5 + 0.5) * width, y: (-screen.y * 0.5 + 0.5) * height } : null;
