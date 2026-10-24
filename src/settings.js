@@ -6,23 +6,31 @@ export const settings = {
   size: 1,
   autoRotate: true,
   rotateSpeed: 0.6,
-  glowStrength: 1,
-  glowSize: 1.12,
-  // Dots
-  dotDensity: 90000,
-  dotSize: 1,
-  dotSizeVariation: 1.6,
-  dotOpacity: 0.55,
-  colorJitter: 0.7,
+  // Ink & sticker
+  outlineWidth: 0.025,
+  stickerWidth: 0.045,
+  wobble: 0.008,
+  boilFps: 6,
+  shadow: 0.6,
+  doodles: true,
+  // Map
+  coastlineWidth: 8,
+  waves: 1,
+  speckles: 0.6,
   // Arcs
-  arcHeight: 0.3,
-  arcThickness: 0.0045,
-  arcOpacity: 0.9,
-  pulseSpeed: 0.15,
+  arcHeight: 0.25,
+  arcThickness: 0.006,
+  arcOpacity: 1,
+  dashes: 1,
+  flowSpeed: 0.6,
   drawSpeed: 0.8,
-  // Markers
-  markerSize: 1,
-  markerPulse: 0.5,
+  // Pins
+  pinSize: 1.2,
+  pinHop: 1,
+  blink: true,
+  // Bean characters
+  showBeans: true,
+  beanSize: 1.5,
   // Chips
   showChips: true,
   chipInterval: 3,

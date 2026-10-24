@@ -93,8 +93,31 @@ const globe = createPartnerGlobe($('[data-globe]'), {
   },
 });
 
+// Hand-drawn motion marks around the globe, in a 300-unit box where the globe's radius is 100.
+const doodles = $('[data-doodles]');
+const DOODLES = [
+  ['M-43.5 -107.5 L-50.2 -124.2', 'M-69.8 -92.7 L-80.7 -107.1', 'M-91.4 -71.5 L-105.6 -82.5'], // shake marks
+  ['M98.3 68.8 A120 120 0 0 0 115.9 -31.1', 'M125.9 45.8 A134 134 0 0 0 133.5 -11.7'], // whoosh
+  ['M86.8 -117 L86.8 -90', 'M73.4 -103.4 L100.2 -103.4'], // sparkle
+];
+doodles.innerHTML = DOODLES.map((paths) => `<g>${
+  ['under', 'ink'].map((layer) => paths.map((d) => `<path class="${layer}" d="${d}"/>`).join('')).join('')
+}</g>`).join('');
+
+function placeDoodles() {
+  const { x, y, r } = globe.screenCircle();
+  const show = settings.doodles && r > 0;
+  doodles.toggleAttribute('hidden', !show); // SVG elements have no .hidden property
+  if (!show) return;
+  const size = r * 3;
+  doodles.style.width = `${size}px`;
+  doodles.style.height = `${size}px`;
+  doodles.style.translate = `${x - size / 2}px ${y - size / 2}px`;
+}
+
 let lastCycle = 0;
-(function followChip(now = 0) {
+(function frame(now = 0) {
+  placeDoodles();
   if (now - lastCycle > settings.chipInterval * 1000) {
     lastCycle = now;
     const facing = partners.filter((p) => globe.screenPosition(p.id));
@@ -105,15 +128,21 @@ let lastCycle = 0;
   if (partner !== chipFor) {
     chipFor = partner;
     if (partner) {
-      $('[data-chip-swatch]').style.background = ART[partners.indexOf(partner) % ART.length][1];
+      // Partners get their card's colour; bean characters a plain sticker swatch.
+      const index = partners.indexOf(partner);
+      $('[data-chip-swatch]').style.background = index >= 0 ? ART[index % ART.length][1] : 'var(--cf-globe-land)';
       $('[data-chip-title]').textContent = partner.name;
-      $('[data-chip-meta]').textContent = partner.country;
+      $('[data-chip-meta]').textContent = partner.country ?? partner.where;
       if (!reduceMotion.matches) chip.animate([{ opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1 }], { duration: 280, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' });
     }
   }
   chip.hidden = !pos;
-  if (pos) chip.style.translate = `${pos.x}px ${pos.y}px`;
-  requestAnimationFrame(followChip);
+  if (pos) {
+    chip.style.translate = `${pos.x}px ${pos.y}px`;
+    // Hang the chip off the left of the pin when it would run off the right edge.
+    chip.classList.toggle('cf-chip--left', pos.x + chip.offsetWidth + 24 > root.querySelector('[data-globe]').offsetWidth);
+  }
+  requestAnimationFrame(frame);
 })();
 
 function step(delta) {

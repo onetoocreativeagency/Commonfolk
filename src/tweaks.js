@@ -5,7 +5,7 @@ import { COLOR_TOKENS } from './globe.js';
 // Live tweak panel for the globe. Changes persist in this browser while you
 // experiment; "Copy settings" / "Copy colours" give you code to paste back in.
 
-const STORAGE_KEY = 'cf-globe-tweaks';
+const STORAGE_KEY = 'cf-globe-tweaks-v2';
 const BRAND_TOKENS = [
   '--cf-dank-purple', '--cf-dank-purple-500', '--cf-dank-purple-100',
   '--cf-dusky-blue', '--cf-dusky-blue-100',
@@ -13,18 +13,15 @@ const BRAND_TOKENS = [
   '--cf-off-white', '--cf-off-black',
 ];
 const COLOR_LABELS = {
-  ocean: 'Globe',
-  shade: 'Globe shade',
-  landA: 'Dots · start',
-  landB: 'Dots · middle',
-  landC: 'Dots · end',
-  glow: 'Glow',
-  pin: 'Marker ring',
-  halo: 'Marker halo',
-  pinActive: 'Selected halo',
-  arcA: 'Arc · farm end',
-  arcB: 'Arc · roastery end',
-  home: 'Roastery marker',
+  ocean: 'Ocean',
+  land: 'Land',
+  ink: 'Ink (outlines)',
+  sticker: 'Sticker border',
+  wave: 'Wave marks',
+  pin: 'Pins',
+  pinActive: 'Selected pin',
+  arc: 'Arc dashes',
+  home: 'Roastery cup',
 };
 
 const toHex = (css) => `#${new Color(css.trim()).getHexString()}`;
@@ -94,7 +91,7 @@ export function mountTweaks({ globe, settings, root }) {
   if (saved) {
     const known = Object.fromEntries(Object.entries(saved.settings ?? {}).filter(([key]) => key in defaults));
     globe.updateSettings(known);
-    Object.assign(colors, saved.colors);
+    Object.entries(saved.colors ?? {}).forEach(([key, value]) => { if (key in colors) colors[key] = value; });
     page.background = saved.page ?? page.background;
     applyColors();
   }
@@ -118,26 +115,36 @@ export function mountTweaks({ globe, settings, root }) {
   add(globeFolder, 'size', 'Size', 0.6, 1.6, 0.01);
   add(globeFolder, 'autoRotate', 'Auto-rotate');
   add(globeFolder, 'rotateSpeed', 'Rotate speed', 0, 3, 0.05);
-  add(globeFolder, 'glowStrength', 'Glow strength', 0, 3, 0.05);
-  add(globeFolder, 'glowSize', 'Glow size', 1, 1.5, 0.01);
 
-  const dotsFolder = gui.addFolder('Dots');
-  add(dotsFolder, 'dotDensity', 'Density', 20000, 250000, 5000, false);
-  add(dotsFolder, 'dotSize', 'Size', 0.3, 3, 0.05);
-  add(dotsFolder, 'dotSizeVariation', 'Size variation', 0, 5, 0.1);
-  add(dotsFolder, 'dotOpacity', 'Min opacity', 0, 1, 0.01);
-  add(dotsFolder, 'colorJitter', 'Colour mix', 0, 1.5, 0.05);
+  const inkFolder = gui.addFolder('Ink & sticker');
+  add(inkFolder, 'outlineWidth', 'Outline width', 0, 0.08, 0.001);
+  add(inkFolder, 'stickerWidth', 'Sticker border', 0, 0.12, 0.001);
+  add(inkFolder, 'wobble', 'Wobble', 0, 0.03, 0.001);
+  add(inkFolder, 'boilFps', 'Boil (frames/s)', 0, 12, 1);
+  add(inkFolder, 'shadow', 'Hatched shadow', 0, 1, 0.05);
+  add(inkFolder, 'doodles', 'Motion doodles');
+
+  const mapFolder = gui.addFolder('Map');
+  add(mapFolder, 'coastlineWidth', 'Coastline width', 2, 24, 0.5, false);
+  add(mapFolder, 'waves', 'Wave marks', 0, 3, 0.1, false);
+  add(mapFolder, 'speckles', 'Land speckles', 0, 3, 0.1, false);
 
   const arcsFolder = gui.addFolder('Arcs');
   add(arcsFolder, 'arcHeight', 'Height', 0, 0.8, 0.01);
-  add(arcsFolder, 'arcThickness', 'Thickness', 0.001, 0.015, 0.0005);
+  add(arcsFolder, 'arcThickness', 'Thickness', 0.002, 0.02, 0.0005);
   add(arcsFolder, 'arcOpacity', 'Opacity', 0, 1, 0.01);
-  add(arcsFolder, 'pulseSpeed', 'Pulse speed', 0, 0.8, 0.01);
+  add(arcsFolder, 'dashes', 'Dash density', 0.3, 3, 0.05);
+  add(arcsFolder, 'flowSpeed', 'Flow speed', 0, 3, 0.05);
   add(arcsFolder, 'drawSpeed', 'Draw-in speed', 0.1, 3, 0.05);
 
-  const markersFolder = gui.addFolder('Markers');
-  add(markersFolder, 'markerSize', 'Size', 0.4, 3, 0.05);
-  add(markersFolder, 'markerPulse', 'Pulse speed', 0, 2, 0.05);
+  const pinsFolder = gui.addFolder('Pins');
+  add(pinsFolder, 'pinSize', 'Size', 0.5, 2.5, 0.05);
+  add(pinsFolder, 'pinHop', 'Hop', 0, 3, 0.05);
+  add(pinsFolder, 'blink', 'Blink');
+
+  const beansFolder = gui.addFolder('Bean characters');
+  add(beansFolder, 'showBeans', 'Show beans');
+  add(beansFolder, 'beanSize', 'Size', 0.5, 2, 0.05);
 
   const chipsFolder = gui.addFolder('Chips');
   add(chipsFolder, 'showChips', 'Show chips');

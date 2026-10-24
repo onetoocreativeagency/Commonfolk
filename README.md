@@ -1,6 +1,6 @@
 # Commonfolk Partnership Coffee Globe
 
-An interactive, Stripe-style dotted globe that shows Commonfolk's coffee partners around the world. Spin it, tap a pin, and meet the people behind the coffee — with their latest release and a link to read their story.
+An interactive globe, drawn in Commonfolk's hand-drawn sticker style, that shows their coffee partners around the world. Spin it, tap a googly-eyed pin, and meet the people behind the coffee — with their latest release and a link to read their story. Bean characters hang out around the world for a bit of personality.
 
 Built with [three.js](https://threejs.org) (WebGL) + [Vite](https://vite.dev). No framework.
 
@@ -18,7 +18,8 @@ npm run build:preview  # one self-contained HTML file in preview/ (opens from di
 | `src/settings.js` | **The look & feel.** Globe size, dot density/size, arc height, marker size, chip timing, etc. |
 | `src/tweaks.js` | Live tweak panel (see below). Loaded on demand — not part of the normal page bundle. |
 | `src/partners.js` | **The content.** One entry per partner: name, farm, location, story, partner-page URL, latest coffee. Edit this to add/update partners. |
-| `src/globe.js` | The 3D globe. Dotted land (sampled from Natural Earth via `world-atlas`), pins, animated arcs back to the Mornington roastery, drag/auto-rotate, fly-to-partner. |
+| `src/globe.js` | The 3D globe: inked map artwork (Natural Earth via `world-atlas`), boiling ink outline + sticker border, hatched shadow, sticker pins, dashed arcs back to the Mornington roastery cup, drag/auto-rotate, fly-to-partner. |
+| `src/characters.js` | The bean characters (Pacific sea monster, frozen Cold Brew, Sahara sunbather, Atlantic sailor, Tasman surfer): where they sit, their hover captions, and their canvas drawings. |
 | `src/main.js` | Card, floating chips and partner list UI wired to the globe. |
 | `src/style.css` | Brand tokens + layout. Colours come from the *Commonfolk – UI 2024* Figma file. |
 
@@ -26,13 +27,14 @@ npm run build:preview  # one self-contained HTML file in preview/ (opens from di
 
 - Globe auto-rotates; drag to spin. On touch, dragging the globe spins it rather than scrolling the page.
 - Hover a pin for a name tag; click/tap to fly to it and open the partner card.
+- Hover a bean character for its caption; tap it and it boings.
 - Partner names below the globe do the same (keyboard accessible); ←/→ and Esc work while a card is open.
 - Respects `prefers-reduced-motion` (no auto-rotate, instant transitions).
 - Rendering pauses when the globe is scrolled off-screen.
 
 ### Tweak panel
 
-A slider panel for every visual parameter (globe, dots, arcs, markers, chips, colours). It appears in `npm run dev`, in the single-file preview, and on any build with `?tweak` in the URL.
+A slider panel for every visual parameter (globe, ink & sticker, map, arcs, pins, bean characters, chips, colours). It appears in `npm run dev`, in the single-file preview, and on any build with `?tweak` in the URL.
 
 - Changes apply live and are remembered in your browser until you hit **Reset everything**.
 - **Copy settings** → paste over `src/settings.js` to make your tuning the default.

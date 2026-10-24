@@ -38,19 +38,16 @@ body {
 }
 
 .cf-partners {
-  /* Globe colours — read by globe.js */
-  --cf-globe-ocean: var(--cf-off-white);
-  --cf-globe-shade: var(--cf-dank-purple-100);
-  --cf-globe-land-a: var(--cf-dusky-blue);
-  --cf-globe-land-b: var(--cf-dank-purple);
-  --cf-globe-land-c: var(--cf-dirty-pink);
-  --cf-globe-glow: var(--cf-off-white);
-  --cf-globe-pin: var(--cf-dank-purple);
-  --cf-globe-halo: var(--cf-dirty-pink);
-  --cf-globe-pin-active: var(--cf-dusky-blue);
-  --cf-globe-arc-a: var(--cf-dirty-pink);
-  --cf-globe-arc-b: var(--cf-dank-purple);
-  --cf-globe-home: var(--cf-dusky-blue);
+  /* Globe colours — read by globe.js (and the sticker-style UI around it) */
+  --cf-globe-ocean: var(--cf-dusky-blue);
+  --cf-globe-land: var(--cf-off-white);
+  --cf-globe-ink: var(--cf-dank-purple);
+  --cf-globe-sticker: var(--cf-off-white);
+  --cf-globe-wave: var(--cf-dusky-blue-100);
+  --cf-globe-pin: var(--cf-dirty-pink);
+  --cf-globe-pin-active: var(--cf-dank-purple);
+  --cf-globe-arc: var(--cf-dank-purple);
+  --cf-globe-home: var(--cf-off-white);
 
   max-width: 1440px;
   margin: 0 auto;
@@ -127,27 +124,33 @@ body {
   align-items: center;
   gap: var(--cf-space-s);
   pointer-events: none;
-  padding: var(--cf-space-s) 12px var(--cf-space-s) var(--cf-space-s);
-  border-radius: var(--cf-radius-s);
+  padding: 6px 12px 6px 6px;
+  border: 2.5px solid var(--cf-globe-ink);
+  border-radius: 12px;
   background: var(--cf-off-white);
-  box-shadow: 0 6px 24px rgb(65 53 73 / 0.14);
+  box-shadow: 0 0 0 4px var(--cf-globe-sticker); /* sticker border */
   font-size: 15px;
   line-height: 1;
   white-space: nowrap;
-  transform: translate(14px, calc(-100% - 10px)) rotate(-2deg);
+  transform: translate(10px, calc(-100% - 6px)) rotate(-3deg);
   transform-origin: bottom left;
 }
 
 .cf-chip[hidden] { display: none; }
 
+.cf-chip--left {
+  transform: translate(calc(-100% - 10px), calc(-100% - 6px)) rotate(3deg);
+  transform-origin: bottom right;
+}
+
 .cf-chip__swatch {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  border: 4px solid var(--cf-dank-purple);
+  border: 2.5px solid var(--cf-globe-ink);
 }
 
-.cf-chip strong { font-weight: 600; }
+.cf-chip strong { font-family: var(--cf-font-hand); font-weight: 600; font-size: 17px; }
 .cf-chip__meta { color: var(--cf-dank-purple-500); }
 
 /* Partner card — mirrors the "Card with Illustration" / newsletter pop-up in the UI kit */
@@ -158,16 +161,18 @@ body {
   width: 400px;
   max-height: 100%;
   overflow: auto;
-  transform: translateY(-50%);
+  transform: translateY(-50%) rotate(-1deg);
   background: var(--cf-off-white);
+  border: 3px solid var(--cf-globe-ink);
   border-radius: var(--cf-radius-l);
+  box-shadow: 0 0 0 6px var(--cf-globe-sticker); /* sticker border */
   animation: cf-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .cf-card[hidden] { display: none; }
 
 @keyframes cf-pop {
-  from { opacity: 0; transform: translateY(-50%) scale(0.92) rotate(-2deg); }
+  from { opacity: 0; transform: translateY(-50%) scale(0.9) rotate(-5deg); }
 }
 
 .cf-card__close {
@@ -177,7 +182,7 @@ body {
   z-index: 1;
   width: 40px;
   height: 40px;
-  border: 0;
+  border: 2.5px solid var(--cf-globe-ink);
   border-radius: 50%;
   background: var(--cf-off-white);
   color: var(--cf-dank-purple);
@@ -188,7 +193,8 @@ body {
 
 .cf-card__media {
   aspect-ratio: 2 / 1;
-  border-radius: var(--cf-radius-l) var(--cf-radius-l) 0 0;
+  border-bottom: 3px solid var(--cf-globe-ink);
+  border-radius: 13px 13px 0 0;
   overflow: hidden;
 }
 
@@ -257,7 +263,7 @@ body {
   padding: 2px 10px;
   border-radius: 999px;
   background: var(--cf-off-white);
-  border: 1px solid var(--cf-dirty-pink);
+  border: 2px solid var(--cf-globe-ink);
   font-size: 14px;
   line-height: 1.6;
 }
@@ -300,7 +306,7 @@ body {
 
 .cf-card__nav button {
   width: 56px;
-  border: 1px solid var(--cf-dank-purple);
+  border: 2px solid var(--cf-dank-purple);
   border-radius: var(--cf-radius-l);
   background: none;
   color: var(--cf-dank-purple);
@@ -357,7 +363,7 @@ body {
     right: auto;
     width: auto;
     max-height: none;
-    margin-top: var(--cf-space-r);
+    margin: var(--cf-space-r) 6px 6px;
     transform: none;
   }
   @keyframes cf-pop {
@@ -368,7 +374,38 @@ body {
   .cf-card__name { font-size: 32px; }
 }
 
+/* Hand-drawn motion marks doodled around the globe (positioned by main.js) */
+.cf-doodles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cf-doodles[hidden] { display: none; }
+.cf-doodles path { vector-effect: non-scaling-stroke; }
+.cf-doodles .under { stroke: var(--cf-globe-sticker); stroke-width: 12; }
+.cf-doodles .ink { stroke: var(--cf-globe-ink); stroke-width: 4.5; }
+.cf-doodles g {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cf-boil 0.5s steps(1, end) infinite;
+}
+.cf-doodles g:nth-child(2) { animation-delay: -0.17s; }
+.cf-doodles g:nth-child(3) { animation-delay: -0.33s; }
+
+@keyframes cf-boil {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(1.5px, -1px) rotate(2deg); }
+  66% { transform: translate(-1px, 1px) rotate(-1.5deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .cf-doodles g { animation: none; }
   .cf-card { animation: none; }
   .cf-button, .cf-card__notes li { transition: none; transform: none; }
 }
